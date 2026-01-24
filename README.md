@@ -45,3 +45,31 @@ pip install -r requirements.txt
 
 # 환경 변수 설정
 export OPENAI_API_KEY="your_api_key_here"
+
+## 📂 폴더 구조
+├── cv_test.py # 실시간 수어 인식 및 문장 생성 메인 실행 파일
+├── recognizer.py # 수어 인식 로직 (시계열 처리)
+├── recognizer_v2.py # 개선된 수어 인식 모델 로직
+├── features.py # 손/포즈 기반 특징 추출
+├── preprocess.py # 입력 데이터 전처리
+├── models.py # 모델 구성 및 로드 함수
+├── labels.py # 수어 라벨 정의
+├── class_names.json # 클래스 인덱스 정보
+├── mean.npy # 정규화 평균 값
+├── std.npy # 정규화 표준편차 값
+├── slim_v1.keras # 수어 인식 모델 (앙상블)
+├── slim_v2.keras
+├── slim_v3.keras
+├── config.py # 환경 및 하이퍼파라미터 설정
+├── ui.py # 사용자 인터페이스 관련 코드
+├── translator.py # 수어 인식 결과 후처리 및 문장 구성
+├── requirements.txt # 프로젝트 의존성 목록
+└── README.md # 프로젝트 설명
+
+## 🧩 확장 가능성
+
+Sign2Talk은 다음과 같은 기능 확장이 가능합니다:
+
+- 감정 표현(폰트 스타일, 이모지, TTS 등)을 포함한 풍부한 출력  
+- 다양한 사용자 환경을 반영한 데이터셋 확장  
+- 양방향 소통 기능 강화  
