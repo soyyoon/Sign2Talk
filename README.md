@@ -45,6 +45,7 @@ pip install -r requirements.txt
 
 # 환경 변수 설정
 export OPENAI_API_KEY="your_api_key_here"
+```
 
 ## 📂 폴더 구조
 ├── cv_test.py # 실시간 수어 인식 및 문장 생성 메인 실행 파일
