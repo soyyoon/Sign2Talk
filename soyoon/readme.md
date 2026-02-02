@@ -128,13 +128,13 @@
 └── webcam_local.py             # 실행 파일
 
 2. 설정 조정
-# 신뢰도 임계값 (낮추면 더 많이 인식)
+신뢰도 임계값 (낮추면 더 많이 인식)
 CONFIDENCE_THRESHOLD = 0.7  # 0.5~0.9
 
-# 예측 빈도 (낮추면 더 자주 예측, CPU 많이 사용)
+예측 빈도 (낮추면 더 자주 예측, CPU 많이 사용)
 FRAME_STRIDE = 10  # 5~15
 
-# 중복 필터링 (같은 단어 재출력 대기 시간)
+중복 필터링 (같은 단어 재출력 대기 시간)
 DUPLICATE_FILTER_SEC = 2.0  # 1~3초
 
 키보드:
@@ -159,32 +159,32 @@ R: 리셋 (버퍼 초기화)
 
 4. 문제 해결
 ❌ "웹캠을 찾을 수 없습니다"
-# 카메라 번호 변경
+카메라 번호 변경
 cap = cv2.VideoCapture(1)  # 0 → 1
 ❌ "모델을 찾을 수 없습니다"
-# 파일 존재 확인
+파일 존재 확인
 ls /Users/soyun/Desktop/s2t/26.02.02/*.keras
-# 경로 확인
+경로 확인
 pwd
 
 ❌ FPS가 너무 낮음 (< 10)
-# 해상도 낮추기
+해상도 낮추기
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
-# 예측 빈도 낮추기
+예측 빈도 낮추기
 FRAME_STRIDE = 15
 ❌ 인식이 안 됨
-# 1. 신뢰도 낮추기
+1. 신뢰도 낮추기
 CONFIDENCE_THRESHOLD = 0.5
 
-# 2. MediaPipe 설정 낮추기
+2. MediaPipe 설정 낮추기
 holistic = mp_holistic.Holistic(
     min_detection_confidence=0.3,
     min_tracking_confidence=0.3
 )
 ❌ 같은 단어만 계속 나옴
-# 중복 필터링 시간 늘리기
+중복 필터링 시간 늘리기
 DUPLICATE_FILTER_SEC = 3.0
 
 
@@ -237,23 +237,23 @@ DUPLICATE_FILTER_SEC = 3.0
 python# 신뢰도 임계값 (낮추면 더 많이 인식)
 CONFIDENCE_THRESHOLD = 0.70  # 0.6~0.85
 
-# 예측 빈도 (낮추면 더 자주 예측)
+예측 빈도 (낮추면 더 자주 예측)
 FRAME_STRIDE = 5  # 3~10
 
-# 중복 방지 시간
-# add_frame_and_predict 함수에서
+중복 방지 시간
+add_frame_and_predict 함수에서
 current_time - self.last_prediction_time > 1.5  # 1~3초
 
 5. 문제 해결
 Q1: 단어가 너무 빨리 추가됨
-# 중복 방지 시간 늘리기
+중복 방지 시간 늘리기
 current_time - self.last_prediction_time > 2.5  # 1.5 → 2.5
 Q2: 단어가 안 추가됨
-# 신뢰도 낮추기
+신뢰도 낮추기
 CONFIDENCE_THRESHOLD = 0.60  # 0.70 → 0.60
 
-# 예측 빈도 높이기
+예측 빈도 높이기
 FRAME_STRIDE = 3  # 5 → 3
 Q3: 같은 단어만 반복됨
-# 중복 방지 시간 늘리기
+중복 방지 시간 늘리기
 current_time - self.last_prediction_time > 2.0  # 1.5 → 2.0
