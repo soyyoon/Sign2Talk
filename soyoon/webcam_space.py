@@ -18,12 +18,17 @@ import time
 from PIL import ImageFont, ImageDraw, Image
 import openai
 from openai import OpenAI
-
+from translator import Translator, make_final_korean_sentence
+import openai
+from openai import OpenAI
 # ============================================================
 # 설정
 # ============================================================
 
-MODEL_DIR = '/Users/soyun/Desktop/s2t/26.02.02'
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent
+MODEL_DIR = BASE_DIR / "models"
 
 # OpenAI API 설정 (환경변수에서 가져오기)
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
@@ -207,61 +212,6 @@ def spatial_normalization(features, shoulder_width):
         normalized[distance_indices] /= shoulder_width
     return normalized
 
-
-# ============================================================
-# GPT 문장 생성
-# ============================================================
-
-def generate_sentence_with_gpt(word_list):
-    """GPT-4o-mini를 사용하여 단어 리스트를 자연스러운 문장으로 변환"""
-    if not word_list:
-        return "단어가 없습니다."
-    
-    korean_words = [KSL_LABELS_KR.get(word, word) for word in word_list]
-    words_str = ", ".join(korean_words)
-    
-    prompt = f"""
-다음은 한국 수어로 인식된 단어들입니다:
-{words_str}
-
-이 단어들을 사용하여 자연스러운 한국어 문장을 만들어주세요.
-문장은 존댓말이 아닌 평서문으로 작성해주세요.
-한국어 수어 문법에 맞게 조사를 적절히 추가하고, 문법에 맞게 다듬어주세요.
-
-문장만 출력해주세요:
-"""
-    
-    try:
-        if USE_NEW_API:
-            response = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": "당신은 한국 수어를 자연스러운 한국어 문장으로 변환하는 전문가입니다."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.7,
-                max_tokens=200
-            )
-            sentence = response.choices[0].message.content.strip()
-        else:
-            response = openai.ChatCompletion.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": "당신은 한국 수어를 자연스러운 한국어 문장으로 변환하는 전문가입니다."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.7,
-                max_tokens=200
-            )
-            sentence = response.choices[0].message.content.strip()
-        
-        return sentence
-    
-    except Exception as e:
-        print(f"❌ GPT API 오류: {e}")
-        return f"{words_str}"
-
-
 # ============================================================
 # 수어 인식 클래스
 # ============================================================
@@ -321,6 +271,9 @@ class SignLanguageRecognizer:
         self.generated_sentence = ""
         self.generating = False
         
+        # 문장 생성기 (GPT)
+        self.translator = Translator()
+
         print("\n✅ 초기화 완료!")
         print("=" * 60 + "\n")
     
@@ -401,7 +354,12 @@ class SignLanguageRecognizer:
         # GPT 문장 생성
         self.generating = True
         print("💬 GPT로 문장 생성 중...")
-        self.generated_sentence = generate_sentence_with_gpt(self.word_list)
+        _, ko_sentence = make_final_korean_sentence(
+            translator=self.translator,
+            sentence_eng=[],                 # 영어는 디버그용 → 비워도 됨
+            sentence_kor=[KSL_LABELS_KR.get(w, w) for w in self.word_list]
+        )
+        self.generated_sentence = ko_sentence
         self.generating = False
         print(f"✅ 생성 완료: {self.generated_sentence}\n")
     
