@@ -140,24 +140,85 @@ Output:
 # =========================================================
 
 TOKEN_TYPE = {
+    # 주어 / 인물
     "나": "subject",
     "너": "subject",
     "우리": "subject",
-    "부모님": "subject",
+    "누구": "subject",
+    "사람": "subject",
+    "가족": "subject",
+    "여동생": "subject",
 
-    "밥": "object",
-    "학교": "object",
-    "서울": "place",
-
-    "가다": "verb",
-    "오다": "verb",
+    # 동작 / 상태 (동사·형용사)
+    "만나다": "verb",
     "보다": "verb",
     "먹다": "verb",
+    "타다": "verb",
+    "도착하다": "verb",
+    "묻다": "verb",
+    "걷다": "verb",
+    "공부하다": "verb",
+    "받다": "verb",
+    "걱정하다": "verb",
+    "태어나다": "verb",
+    "원하다": "verb",
 
+    "좋다": "adjective",
+    "괜찮다": "adjective",
+    "반갑다": "adjective",
+    "미안하다": "adjective",
+    "감사하다": "adjective",
+    "아니": "adjective",
+    "잘": "adverb",
+    "조심": "adverb",
+
+    # 사물 / 대상
+    "비빔밥": "object",
+    "영화": "object",
+    "얼굴": "object",
+    "이름": "object",
+    "핸드폰": "object",
+    "시험": "object",
+    "음식": "object",
+    "책임": "object",
+    "경험": "object",
+    "노력": "object",
+    "수고": "object",
+    "부탁": "object",
+    "결혼": "object",
+    "땀": "object",
+
+    # 장소
+    "서울": "place",
+    "지하철": "place",
+    "버스": "place",
+    "위치": "place",
+
+    # 시간
     "어제": "time",
-    "오늘": "time",
-    "내일": "time",
+    "지금": "time",
+    "언제": "time",
+    "날": "time",
+    "시간": "time",
+    "저녁": "time",
+    "한시간": "time",
+    "아직": "time",
+    "다시": "time",
+    "마침내": "time",
+
+    # 수량 / 질문
+    "몇": "quantity",
+    "나이": "quantity",
+    "어디": "question",
+
+    # 기타 수식
+    "특별한": "modifier",
+    "초대": "event",
+    "성공": "event",
+    "끝": "event",
+    "취미": "topic"
 }
+
 
 def ko_sentence_from_kor_tokens(kor_tokens: List[str]) -> str:
     if not kor_tokens:
