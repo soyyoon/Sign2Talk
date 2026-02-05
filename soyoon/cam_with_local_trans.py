@@ -23,7 +23,10 @@ from translator import ko_sentence_from_kor_tokens
 # 설정
 # ============================================================
 
-MODEL_DIR = '/Users/soyun/Desktop/s2t/26.02.02'
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent
+MODEL_DIR = BASE_DIR / "models"
 
 MAX_FRAMES = 30
 FEATURE_DIM = 53
