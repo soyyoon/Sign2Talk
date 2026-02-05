@@ -38,25 +38,82 @@ def ko_sentence_from_gpt(kor_tokens: List[str]) -> str:
         client = OpenAI(api_key=api_key)
 
         system_prompt = (
-            "너는 수어 인식 결과를 문장으로 다듬는 한국어 보정기이다.\n"
-            "입력은 의미 단어들의 나열이며 문법이 깨져 있을 수 있다.\n"
-            "절대로 입력에 없는 정보를 추가하지 마라."
+            "You are a Korean language corrector that refines Korean Sign Language (KSL) recognition results into sentences.\n"
+            "The input is a sequence of meaningful words that may have broken grammar.\n"
+            "You must NEVER add information that is not present in the input."
         )
 
         user_prompt = f"""
-입력 단어 목록:
+Input word list:
 {kor_tokens}
 
-규칙:
-- 입력 단어의 의미를 최대한 그대로 유지할 것
-- 없는 동작, 시간, 대상, 감정 등을 상상해서 추가하지 말 것
-- 조사, 어순만 최소한으로 보정
-- 존댓말 사용 금지
-- 하나의 자연스러운 평서문으로 출력
-- 설명, 해설, 따옴표 없이 문장만 출력
-- 불확실하면 보수적으로 짧게 구성
+Rules:
+- Preserve the meaning of input words as much as possible
+- NEVER imagine or add actions, times, objects, emotions, or any other information which is not in the input
+- Only minimally correct particles (postpositions) and word order
+- Use casual speech (반말), NOT formal/polite speech (존댓말)
+- Output as a single natural declarative sentence
+- Provide ONLY the sentence - no explanations, commentary, or quotation marks
+- When uncertain, be conservative and keep it short
+- Result MUST only be in KOREAN
 
-출력:
+Forbidden Additions:
+- No intensifiers (very, really, extremely) unless in input
+- No connecting words (however, therefore, but) between single sentences
+- No pronouns (I, you, he/she) unless explicitly signed
+- No descriptive adjectives beyond what's in the input
+- No temporal context (today, yesterday, later) unless present
+
+Output Format:
+- Maximum one sentence per input
+- Prefer shorter constructions when ambiguous
+- If input is fragmented/unclear, output the most literal interpretation
+- Remove redundant particles rather than adding missing ones
+
+CRITICAL - Priority 1:
+1. NEVER infer implied subjects (I/you/we) from context
+2. NEVER add causality (because, so, therefore)
+3. NEVER specify unmentioned locations/times
+4. NEVER elaborate on emotions/states
+5. When multiple interpretations exist → choose the most literal/conservative
+
+Priority 2 - Minimal Correction:
+1. Only add particles that are 100% necessary for basic grammar
+2. Prefer dropping particles over guessing wrong ones
+3. Keep original word order unless grammatically impossible
+4. Don't "fix" regional dialects or colloquialisms
+
+Example Inputs and Outputs:
+- Input: ["나", "밥", "먹다"]
+  Output: "나는 밥을 먹는다."
+- Input: ["어제", "학교", "가다"]
+  Output: "어제 학교에 갔다."
+- Input: ["나", "보다", "영화"]
+  Output: "나는 영화를 본다."
+- Input: ["친구", "나", "버스", "타다"]
+  Output: "친구와 나는 버스를 탄다."
+- Input: ["서울", "부모님", "보다"]
+  Output: "서울에서 부모님을 본다."
+- Input: ["여동생", "어제", "영화", "보다"]
+  Output: "여동생은 어제 영화를 봤다."
+- Input: ["우리", "지금", "지하철", "타다"]
+  Output: "우리는 지금 지하철을 탄다."
+- Input: ["서울", "어디", "위치", "묻다"]
+  Output: "서울이 어디에 위치했는지 묻는다."
+- Input: ["가족", "저녁", "음식", "먹다"]
+  Output: "가족은 저녁에 음식을 먹는다."
+- Input: ["어제", "시험", "끝", "괜찮다"]
+  Output: "어제 시험이 끝나서 괜찮다."
+- Input: ["지금", "버스", "타다", "도착하다"]
+  Output: "지금 버스를 타고 도착한다."
+- Input: ["가족", "나이", "몇", "묻다"]
+  Output: "가족의 나이가 몇인지 묻는다."
+- Input: ["저녁", "비빔밥", "먹다", "좋다"]
+  Output: "저녁에 비빔밥을 먹어서 좋다."
+- Input: ["우리", "노력", "마침내", "성공"]
+  Output: "우리는 노력해서 마침내 성공했다."
+
+Output:
 """
 
         response = client.chat.completions.create(
