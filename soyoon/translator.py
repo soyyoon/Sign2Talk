@@ -228,6 +228,8 @@ def ko_sentence_from_kor_tokens(kor_tokens: List[str]) -> str:
     subject = []
     obj = []
     verb = []
+    adjective = []
+    adverb = []
     etc = []
 
     for tok in kor_tokens:
@@ -240,6 +242,10 @@ def ko_sentence_from_kor_tokens(kor_tokens: List[str]) -> str:
             obj.append(tok)
         elif t == "verb":
             verb.append(tok)
+        elif t == "adjective":
+            adjective.append(tok)
+        elif t == "adverb":
+            adverb.append(tok)
         else:
             etc.append(tok)
 
@@ -249,6 +255,8 @@ def ko_sentence_from_kor_tokens(kor_tokens: List[str]) -> str:
     parts.extend(obj)
     parts.extend(etc)
     parts.extend(verb)
+    parts.extend(adjective)
+    parts.extend(adverb)
 
     if not parts:
         return ""
