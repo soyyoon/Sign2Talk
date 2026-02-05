@@ -19,8 +19,7 @@ from PIL import ImageFont, ImageDraw, Image
 import openai
 from openai import OpenAI
 from translator import Translator, make_final_korean_sentence
-import openai
-from openai import OpenAI
+
 # ============================================================
 # 설정
 # ============================================================
