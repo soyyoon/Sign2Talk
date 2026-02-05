@@ -196,3 +196,6 @@ pyrightconfig.json
 
 
 data/*
+
+*.pyc
+__pycache__/
