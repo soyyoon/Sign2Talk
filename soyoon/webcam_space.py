@@ -275,7 +275,39 @@ class SignLanguageRecognizer:
 
         print("\n✅ 초기화 완료!")
         print("=" * 60 + "\n")
-    
+
+    def push_word(self, pred_class, current_time):
+        """같은 단어가 연속으로 들어가지 않도록 추가"""
+        if self.word_list and self.word_list[-1] == pred_class:
+            self.last_predicted_word = pred_class
+            self.last_prediction_time = current_time
+            return False
+
+        self.word_list.append(pred_class)
+        self.last_predicted_word = pred_class
+        self.last_prediction_time = current_time
+        return True
+
+    def pop_last_word(self):
+        """백스페이스: 최근 단어 1개 삭제"""
+        if not self.word_list:
+            return None
+
+        removed = self.word_list.pop()
+
+        # 단어 리스트가 바뀌면 기존 생성 문장은 무효 -> 지움
+        self.generated_sentence = ""
+
+        # 삭제 후 최근 단어 갱신
+        if self.word_list:
+            self.last_predicted_word = self.word_list[-1]
+            self.last_prediction_time = time.time()
+        else:
+            self.last_predicted_word = None
+            self.last_prediction_time = 0
+
+        return removed
+        
     def predict(self, features_sequence):
         normalized = (features_sequence - self.mean) / self.std
         X = np.expand_dims(normalized, axis=0)
