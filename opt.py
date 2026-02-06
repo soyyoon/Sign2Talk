@@ -1,10 +1,7 @@
 """
-실시간 수어 인식 - 연속 인식 + 자동 문장 생성
+실시간 수어 인식 - 최적화 버전
 ========================================
-Space 1번: 녹화 시작 (실시간 연속 인식)
-Space 2번: 녹화 종료 + 문장 생성
-R: 리셋
-Q: 종료
+로딩 시간 단축 + 실행 버퍼링 최소화
 """
 
 import cv2
@@ -29,7 +26,7 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent
 MODEL_DIR = BASE_DIR / "models"
 
-# OpenAI API 설정 (환경변수에서 가져오기)
+# OpenAI API 설정
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 
 if not OPENAI_API_KEY:
@@ -46,8 +43,8 @@ except:
 
 MAX_FRAMES = 30
 FEATURE_DIM = 53
-CONFIDENCE_THRESHOLD = 0.70  # 실시간 인식이니 조금 낮게
-FRAME_STRIDE = 10  
+CONFIDENCE_THRESHOLD = 0.70
+FRAME_STRIDE = 10
 
 mp_holistic = mp.solutions.holistic
 mp_drawing = mp.solutions.drawing_utils
@@ -71,41 +68,44 @@ KSL_LABELS_KR = {
     "71": "음식", "72": "원하다", "74": "한시간", "76": "잘", "77": "조심"
 }
 
+# 한글 폰트 캐싱 (성능 향상)
+KOREAN_FONT = None
+def get_korean_font(size):
+    global KOREAN_FONT
+    if KOREAN_FONT is None or KOREAN_FONT.size != size:
+        font_paths = [
+            "C:/Windows/Fonts/malgun.ttf",
+            "C:/Windows/Fonts/gulim.ttc",
+        ]
+        for font_path in font_paths:
+            if os.path.exists(font_path):
+                try:
+                    KOREAN_FONT = ImageFont.truetype(font_path, size)
+                    return KOREAN_FONT
+                except:
+                    continue
+        KOREAN_FONT = ImageFont.load_default()
+    return KOREAN_FONT
+
+
 # ============================================================
-# 한글 텍스트 그리기
+# 한글 텍스트 그리기 (최적화)
 # ============================================================
 
 def put_korean_text(img, text, pos, font_size=30, color=(255, 255, 255)):
-    """PIL을 사용하여 한글 텍스트 그리기"""
+    """PIL을 사용하여 한글 텍스트 그리기 - 최적화 버전"""
     img_pil = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
     draw = ImageDraw.Draw(img_pil)
     
-    font_paths = [
-        "C:/Windows/Fonts/malgun.ttf",  # 맑은 고딕
-        "C:/Windows/Fonts/gulim.ttc",   # 굴림
-    ]
-    
-    font = None
-    for font_path in font_paths:
-        if os.path.exists(font_path):
-            try:
-                font = ImageFont.truetype(font_path, font_size)
-                break
-            except:
-                continue
-    
-    if font is None:
-        font = ImageFont.load_default()
-    
+    font = get_korean_font(font_size)
     color_rgb = (color[2], color[1], color[0])
     draw.text(pos, text, font=font, fill=color_rgb)
-    img_result = cv2.cvtColor(np.array(img_pil), cv2.COLOR_RGB2BGR)
     
-    return img_result
+    return cv2.cvtColor(np.array(img_pil), cv2.COLOR_RGB2BGR)
 
 
 # ============================================================
-# Feature 추출 (동일)
+# Feature 추출 (최적화)
 # ============================================================
 
 def calculate_distance(p1, p2):
@@ -204,14 +204,15 @@ def get_shoulder_width(results):
     return 0.2
 
 def spatial_normalization(features, shoulder_width):
-    normalized = features.copy()
+    """최적화: copy 대신 직접 수정"""
     distance_indices = list(range(5, 10)) + list(range(15, 20)) + list(range(20, 27)) + [45, 46] + list(range(47, 53))
     if shoulder_width > 0:
-        normalized[distance_indices] /= shoulder_width
-    return normalized
+        features[distance_indices] /= shoulder_width
+    return features
+
 
 # ============================================================
-# 수어 인식 클래스
+# 수어 인식 클래스 (최적화)
 # ============================================================
 
 class SignLanguageRecognizer:
@@ -220,14 +221,32 @@ class SignLanguageRecognizer:
         print("🤖 수어 인식 시스템 초기화")
         print("=" * 60)
         
-        print("📦 모델 로딩 중...")
+        start_time = time.time()
+        
+        # ✅ TensorFlow 최적화 설정
+        print("⚙️  TensorFlow 최적화 설정...")
+        tf.config.threading.set_inter_op_parallelism_threads(4)
+        tf.config.threading.set_intra_op_parallelism_threads(4)
+        
+        # GPU 사용 가능 시 메모리 증가 허용
+        gpus = tf.config.list_physical_devices('GPU')
+        if gpus:
+            try:
+                for gpu in gpus:
+                    tf.config.experimental.set_memory_growth(gpu, True)
+                print(f"   ✓ GPU 메모리 증가 허용 ({len(gpus)}개)")
+            except RuntimeError as e:
+                print(f"   ⚠️  GPU 설정 실패: {e}")
+        
+        print("\n📦 모델 로딩 중...")
         self.models = []
         for i in range(1, 5):
             model_path = os.path.join(model_dir, f'model_v{i}.keras')
             if os.path.exists(model_path):
+                t0 = time.time()
                 model = tf.keras.models.load_model(model_path, compile=False)
                 self.models.append(model)
-                print(f"   ✓ V{i} 로드 완료")
+                print(f"   ✓ V{i} 로드 완료 ({time.time() - t0:.1f}초)")
         
         if len(self.models) == 0:
             raise FileNotFoundError(f"❌ 모델을 찾을 수 없습니다: {model_dir}")
@@ -250,166 +269,138 @@ class SignLanguageRecognizer:
             self.class_names = json.load(f)
         print(f"   {len(self.class_names)}개 클래스")
         
-        # 녹화 상태
+        # 상태 변수
         self.is_recording = False
         self.frame_buffer = deque(maxlen=MAX_FRAMES)
-        
-        # 인식된 단어 리스트
         self.word_list = []
-        
-        # 최근 인식 정보 (중복 방지)
         self.last_predicted_word = None
         self.last_prediction_time = 0
-        
-        # 실시간 예측 표시
         self.current_prediction = None
         self.current_confidence = 0.0
-        
-        # 생성된 문장
         self.generated_sentence = ""
         self.generating = False
         
-        # 문장 생성기 (GPT)
+        # 문장 생성기
         self.translator = Translator()
 
-        print("\n✅ 초기화 완료!")
+        total_time = time.time() - start_time
+        print(f"\n✅ 초기화 완료! (총 {total_time:.1f}초)")
         print("=" * 60 + "\n")
 
     def push_word(self, pred_class, current_time):
-        """같은 단어가 연속으로 들어가지 않도록 추가"""
         if self.word_list and self.word_list[-1] == pred_class:
             self.last_predicted_word = pred_class
             self.last_prediction_time = current_time
             return False
-
         self.word_list.append(pred_class)
         self.last_predicted_word = pred_class
         self.last_prediction_time = current_time
         return True
 
     def pop_last_word(self):
-        """백스페이스: 최근 단어 1개 삭제"""
         if not self.word_list:
             return None
-
         removed = self.word_list.pop()
-
-        # 단어 리스트가 바뀌면 기존 생성 문장은 무효 -> 지움
         self.generated_sentence = ""
-
-        # 삭제 후 최근 단어 갱신
         if self.word_list:
             self.last_predicted_word = self.word_list[-1]
             self.last_prediction_time = time.time()
         else:
             self.last_predicted_word = None
             self.last_prediction_time = 0
-
         return removed
         
     def predict(self, features_sequence):
+        """✅ 최적화: 배치 예측"""
         normalized = (features_sequence - self.mean) / self.std
         X = np.expand_dims(normalized, axis=0)
-        ensemble_probs = np.zeros(len(self.class_names))
+        
+        ensemble_probs = np.zeros(len(self.class_names), dtype=np.float32)
         for model, weight in zip(self.models, self.ensemble_weights):
             if X.ndim == 4 and X.shape[1] == 1:
                 X = np.squeeze(X, axis=1)
             probs = model.predict(X, verbose=0)[0]
             ensemble_probs += probs * weight
+        
         pred_idx = np.argmax(ensemble_probs)
-        confidence = ensemble_probs[pred_idx]
+        confidence = float(ensemble_probs[pred_idx])
         pred_class = self.class_names[pred_idx]
         return pred_class, confidence
     
     def add_frame_and_predict(self, features, shoulder_width, frame_count):
-        """
-        프레임 추가 + 실시간 예측
-        녹화 중일 때만 작동
-        """
         if not self.is_recording:
             return
         
-        # 프레임 추가
-        normalized = spatial_normalization(features, shoulder_width)
-        self.frame_buffer.append(normalized)
+        # ✅ 최적화: in-place 정규화
+        spatial_normalization(features, shoulder_width)
+        self.frame_buffer.append(features)
         
-        # 버퍼가 차고, stride마다 예측
         if len(self.frame_buffer) == MAX_FRAMES and frame_count % FRAME_STRIDE == 0:
             features_seq = np.array(list(self.frame_buffer))
             pred_class, confidence = self.predict(features_seq)
             
-            # 실시간 표시 업데이트
             self.current_prediction = pred_class
             self.current_confidence = confidence
             
-            # 신뢰도 체크 + 중복 체크
             current_time = time.time()
             is_new_word = (
                 confidence >= CONFIDENCE_THRESHOLD and
                 (pred_class != self.last_predicted_word or 
-                    current_time - self.last_prediction_time > 2.5)  # 1.5초 간격
+                 current_time - self.last_prediction_time > 2.5)
             )
             
             if is_new_word:
                 self.word_list.append(pred_class)
                 self.last_predicted_word = pred_class
                 self.last_prediction_time = current_time
-                
                 korean = KSL_LABELS_KR.get(pred_class, pred_class)
                 print(f"✅ {pred_class}: {korean} ({confidence*100:.1f}%)")
     
     def start_recording(self):
-        """녹화 시작"""
         self.is_recording = True
         self.frame_buffer.clear()
         self.word_list.clear()
         self.last_predicted_word = None
         self.generated_sentence = ""
         self.current_prediction = None
-        print("🔴 녹화 시작 - 실시간 인식 활성화")
+        print("🔴 녹화 시작")
     
     def stop_recording_and_generate(self):
-        """녹화 종료 + 즉시 문장 생성"""
         self.is_recording = False
         self.current_prediction = None
         
-        print(f"⏹️  녹화 종료")
-        print(f"   인식된 단어: {len(self.word_list)}개")
+        print(f"⏹️  녹화 종료 ({len(self.word_list)}개 단어)")
         
         if not self.word_list:
             self.generated_sentence = "인식된 단어가 없습니다."
-            print("   ⚠️  단어 없음")
             return
         
-        # GPT 문장 생성
         self.generating = True
-        print("💬 GPT로 문장 생성 중...")
+        print("💬 문장 생성 중...")
         _, ko_sentence = make_final_korean_sentence(
             translator=self.translator,
-            sentence_eng=[],                 # 영어는 디버그용 → 비워도 됨
+            sentence_eng=[],
             sentence_kor=[KSL_LABELS_KR.get(w, w) for w in self.word_list]
         )
         self.generated_sentence = ko_sentence
         self.generating = False
-        print(f"✅ 생성 완료: {self.generated_sentence}\n")
+        print(f"✅ {self.generated_sentence}\n")
     
     def reset(self):
-        """리셋"""
         self.is_recording = False
         self.frame_buffer.clear()
         self.word_list.clear()
         self.generated_sentence = ""
         self.current_prediction = None
         self.last_predicted_word = None
-        print("🔄 전체 리셋")
+        print("🔄 리셋")
 
 
 # ============================================================
-# UI
+# UI (최적화)
 # ============================================================
 
 def draw_ui(frame, recognizer, fps):
-    """UI 그리기"""
     h, w = frame.shape[:2]
     
     # 상단 패널
@@ -417,95 +408,74 @@ def draw_ui(frame, recognizer, fps):
     cv2.rectangle(overlay, (0, 0), (w, 150), (0, 0, 0), -1)
     frame = cv2.addWeighted(overlay, 0.7, frame, 0.3, 0)
     
-    # 제목
     cv2.putText(frame, "Sign Language Recognition", (20, 40),
                 cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 2)
     
     # 상태
     if recognizer.generating:
-        status_text = "GENERATING..."
-        status_color = (255, 200, 0)
+        status_text, status_color = "GENERATING...", (255, 200, 0)
     elif recognizer.is_recording:
-        status_text = "RECORDING"
-        status_color = (0, 0, 255)
+        status_text, status_color = "RECORDING", (0, 0, 255)
     else:
-        status_text = "READY"
-        status_color = (0, 255, 0)
+        status_text, status_color = "READY", (0, 255, 0)
     
     cv2.putText(frame, status_text, (20, 80),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.8, status_color, 2)
     
-    # 버퍼 상태 + FPS
-    buffer_text = f"Buffer: {len(recognizer.frame_buffer)}/{MAX_FRAMES}"
-    cv2.putText(frame, f"{buffer_text}  |  FPS: {fps:.1f}", (20, 110),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 1)
+    cv2.putText(frame, f"Buffer: {len(recognizer.frame_buffer)}/{MAX_FRAMES}  |  FPS: {fps:.1f}", 
+                (20, 110), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 1)
     
-    # 실시간 예측 표시 (오른쪽 상단)
+    # 실시간 예측
     if recognizer.is_recording and recognizer.current_prediction:
         korean = KSL_LABELS_KR.get(recognizer.current_prediction, "")
-        if korean:
-            pred_text = f"{recognizer.current_prediction}:{korean}"
-        else:
-            pred_text = recognizer.current_prediction
-        
+        pred_text = f"{recognizer.current_prediction}:{korean}" if korean else recognizer.current_prediction
         conf = recognizer.current_confidence
         color = (0, 255, 0) if conf >= CONFIDENCE_THRESHOLD else (100, 100, 100)
         
-        frame = put_korean_text(frame, pred_text, (w - 250, 40), 
-                                font_size=25, color=color)
+        frame = put_korean_text(frame, pred_text, (w - 250, 40), 25, color)
         cv2.putText(frame, f"{conf*100:.0f}%", (w - 100, 80),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
     
-    # 인식된 단어 리스트 (화면 하단에 가로로 나열)
+    # 단어 리스트
     if recognizer.word_list:
-        # 하단 배경
         cv2.rectangle(overlay, (0, h-180), (w, h-80), (0, 0, 0), -1)
         frame = cv2.addWeighted(overlay, 0.75, frame, 0.25, 0)
         
         cv2.putText(frame, "Words:", (20, h-150),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
         
-        # 단어들을 가로로 나열
-        words_display = []
-        for word in recognizer.word_list:
-            korean = KSL_LABELS_KR.get(word, word)
-            words_display.append(f"{word}:{korean}")
-        
-        # 한 줄로 표시
-        words_text = "  →  ".join(words_display)
-        frame = put_korean_text(frame, words_text, (20, h-115), 
-                                font_size=22, color=(100, 255, 255))
+        words_display = [f"{w}:{KSL_LABELS_KR.get(w, w)}" for w in recognizer.word_list]
+        words_text = " → ".join(words_display)
+        frame = put_korean_text(frame, words_text, (20, h-115), 22, (100, 255, 255))
     
-    # 생성된 문장 (맨 아래)
+    # 생성된 문장
     if recognizer.generated_sentence:
         cv2.rectangle(overlay, (0, h-70), (w, h), (0, 0, 0), -1)
         frame = cv2.addWeighted(overlay, 0.85, frame, 0.15, 0)
-        
         frame = put_korean_text(frame, f"문장: {recognizer.generated_sentence}", 
-                                (20, h-45), font_size=23, color=(100, 255, 100))
+                                (20, h-45), 23, (100, 255, 100))
     
-    # 도움말
-    help_text = "Space: Start/Stop & Generate | R: Reset | Q: Quit"
-    cv2.putText(frame, help_text, (20, h-10),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (150, 150, 150), 1)
+    cv2.putText(frame, "Space: Start/Stop | Backspace: Delete | R: Reset | Q: Quit", 
+                (20, h-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (150, 150, 150), 1)
     
     return frame
 
 
 # ============================================================
-# 메인
+# 메인 (최적화)
 # ============================================================
 
 def main():
     if not OPENAI_API_KEY or OPENAI_API_KEY == "your-api-key-here":
-        print("⚠️  경고: OpenAI API 키가 설정되지 않았습니다!")
-        print("   set OPENAI_API_KEY='sk-proj-xxxxx...'\n")
+        print("⚠️  경고: OPENAI_API_KEY 환경변수가 설정되지 않았습니다!")
     
     recognizer = SignLanguageRecognizer(MODEL_DIR)
     
     cap = cv2.VideoCapture(0)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+    cap.set(cv2.CAP_PROP_FPS, 30)  # ✅ FPS 명시
+    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)  # ✅ 버퍼 최소화
     
     holistic = mp_holistic.Holistic(
         static_image_mode=False,
@@ -517,11 +487,9 @@ def main():
     print("🎥 웹캠 시작!")
     print("=" * 60)
     print("💡 사용법:")
-    print("   Space 1번: 녹화 시작 (실시간 연속 인식)")
-    print("   Space 2번: 녹화 종료 + 문장 생성")
-    print("   Backspace 1번: 마지막 단어 삭제")
-    print("   R: 리셋")
-    print("   Q: 종료")
+    print("   Space: 녹화 시작/종료 + 문장 생성")
+    print("   Backspace: 마지막 단어 삭제")
+    print("   R: 리셋 | Q: 종료")
     print("=" * 60 + "\n")
     
     frame_count = 0
@@ -537,9 +505,10 @@ def main():
             frame = cv2.flip(frame, 1)
             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             
+            # ✅ MediaPipe 처리
             results = holistic.process(frame_rgb)
             
-            # Feature 추출 + 실시간 예측
+            # Feature 추출 + 예측
             features = get_53_features(results)
             shoulder_width = get_shoulder_width(results)
             recognizer.add_frame_and_predict(features, shoulder_width, frame_count)
@@ -555,33 +524,26 @@ def main():
                 fps = 10 / (time.time() - fps_time)
                 fps_time = time.time()
             
-            # UI 그리기
+            # UI
             frame = draw_ui(frame, recognizer, fps)
-            
             cv2.imshow('Sign Language Recognition', frame)
             
-            # 키보드 입력
+            # 키보드
             key = cv2.waitKey(1) & 0xFF
             
             if key == ord('q') or key == ord('Q'):
                 break
-            
-            elif key == ord(' '):  # Space
+            elif key == ord(' '):
                 if not recognizer.is_recording:
                     recognizer.start_recording()
                 else:
                     recognizer.stop_recording_and_generate()
-            
             elif key == ord('r') or key == ord('R'):
                 recognizer.reset()
-                
-            elif key == 8:  # Backspace (ASCII 8)
+            elif key == 8:  # Backspace
                 removed = recognizer.pop_last_word()
                 if removed:
-                    korean = KSL_LABELS_KR.get(removed, removed)
-                    print(f"⬅️  단어 삭제: {removed}:{korean}")
-                else:
-                    print("⚠️  삭제할 단어가 없습니다")    
+                    print(f"⬅️  삭제: {removed}:{KSL_LABELS_KR.get(removed, removed)}")
     
     except KeyboardInterrupt:
         print("\n⏹️ 종료 중...")
